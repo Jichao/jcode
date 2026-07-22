@@ -315,6 +315,24 @@ impl Config {
         {
             self.features.update_channel = channel;
         }
+        if let Ok(v) = std::env::var("JCODE_UPDATE_REPO") {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                self.features.update_repo = trimmed.to_string();
+            }
+        }
+        if let Ok(v) = std::env::var("JCODE_UPDATE_API_BASE") {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                self.features.update_api_base = trimmed.trim_end_matches('/').to_string();
+            }
+        }
+        if let Ok(v) = std::env::var("JCODE_UPDATE_GIT_BASE") {
+            let trimmed = v.trim();
+            if !trimmed.is_empty() {
+                self.features.update_git_base = trimmed.trim_end_matches('/').to_string();
+            }
+        }
 
         // Agents (spawned helper sessions)
         if let Ok(v) = std::env::var("JCODE_SWARM_MODEL") {

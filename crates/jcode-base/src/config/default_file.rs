@@ -236,6 +236,16 @@ kv_cache_miss_notices = true
 # Update channel: "stable" (releases only) or "main" (latest commits on push)
 # Set to "main" for bleeding edge updates every time code is pushed
 update_channel = "stable"
+# Repository slug (owner/repo) for release checks and source clones.
+# Default: "1jehuang/jcode". Point these at a self-hosted Gitea fork to
+# distribute your own builds. Also overridable via JCODE_UPDATE_REPO.
+# update_repo = "1jehuang/jcode"
+# API base URL for release/commit lookups. For Gitea, use
+# "https://gitea.example.com/api/v1". Also overridable via JCODE_UPDATE_API_BASE.
+# update_api_base = "https://api.github.com"
+# Git/web base URL for source clones and commit links. For Gitea, use
+# "https://gitea.example.com". Also overridable via JCODE_UPDATE_GIT_BASE.
+# update_git_base = "https://github.com"
 
 [websearch]
 # Preferred websearch engine: "duckduckgo", "bing", or "searxng".

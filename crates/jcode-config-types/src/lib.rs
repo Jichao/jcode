@@ -1193,6 +1193,21 @@ pub struct FeatureConfig {
     pub kv_cache_miss_notices: bool,
     /// Update channel: "stable" (releases only) or "main" (latest commits)
     pub update_channel: UpdateChannel,
+    /// Repository slug (`owner/repo`) for release checks, source clones, and
+    /// update metadata. Default: `"1jehuang/jcode"`. Point this at a
+    /// self-hosted Gitea/GitHub fork to distribute your own builds. Also
+    /// overridable via `JCODE_UPDATE_REPO`.
+    pub update_repo: String,
+    /// API base URL for release/commit lookups. Default:
+    /// `"https://api.github.com"`. For a self-hosted Gitea instance, set this
+    /// to `"https://gitea.example.com/api/v1"`. Also overridable via
+    /// `JCODE_UPDATE_API_BASE`.
+    pub update_api_base: String,
+    /// Git/web base URL for source clones and commit links. Default:
+    /// `"https://github.com"`. For a self-hosted instance, set this to
+    /// `"https://gitea.example.com"`. Also overridable via
+    /// `JCODE_UPDATE_GIT_BASE`.
+    pub update_git_base: String,
 }
 
 impl Default for FeatureConfig {
@@ -1205,6 +1220,9 @@ impl Default for FeatureConfig {
             persist_memory_injections: false,
             kv_cache_miss_notices: true,
             update_channel: UpdateChannel::default(),
+            update_repo: "1jehuang/jcode".to_string(),
+            update_api_base: "https://api.github.com".to_string(),
+            update_git_base: "https://github.com".to_string(),
         }
     }
 }

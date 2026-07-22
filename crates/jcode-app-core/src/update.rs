@@ -16,7 +16,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
-const GITHUB_REPO: &str = "1jehuang/jcode";
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60); // minimum gap between checks
 const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(5);
 /// Time allowed for the initial TCP/TLS connect to the download host.
@@ -38,6 +37,23 @@ const DOWNLOAD_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(120);
 /// connection eventually fails.
 const DOWNLOAD_MAX_ATTEMPTS: usize = 10;
 const DOWNLOAD_PROGRESS_UPDATE_STEP: u64 = 1_048_576;
+
+/// Resolved update endpoints from `[features]` config. Allows pointing the
+/// in-app updater at a self-hosted Gitea/GitHub fork.
+struct UpdateEndpoints {
+    repo: String,
+    api_base: String,
+    git_base: String,
+}
+
+fn update_endpoints() -> UpdateEndpoints {
+    let f = &jcode_base::config::config().features;
+    UpdateEndpoints {
+        repo: f.update_repo.clone(),
+        api_base: f.update_api_base.clone(),
+        git_base: f.update_git_base.clone(),
+    }
+}
 
 pub fn print_centered(msg: &str) {
     let width = crossterm::terminal::size()
@@ -213,10 +229,8 @@ fn is_inside_git_repo(path: &std::path::Path) -> bool {
 }
 
 pub fn fetch_latest_release_blocking() -> Result<GitHubRelease> {
-    let url = format!(
-        "https://api.github.com/repos/{}/releases/latest",
-        GITHUB_REPO
-    );
+    let ep = update_endpoints();
+    let url = format!("{}/repos/{}/releases/latest", ep.api_base, ep.repo);
 
     let client = reqwest::blocking::Client::builder()
         .timeout(UPDATE_CHECK_TIMEOUT)
@@ -261,7 +275,8 @@ fn github_api_request(
 }
 
 fn latest_main_sha_blocking() -> Result<String> {
-    let url = format!("https://api.github.com/repos/{}/commits/main", GITHUB_REPO);
+    let ep = update_endpoints();
+    let url = format!("{}/repos/{}/commits/main", ep.api_base, ep.repo);
     let client = reqwest::blocking::Client::builder()
         .timeout(UPDATE_CHECK_TIMEOUT)
         .user_agent("jcode-updater")
@@ -324,10 +339,11 @@ fn verify_asset_checksum_if_available(
 }
 
 fn synthetic_main_release(latest_sha: &str) -> GitHubRelease {
+    let ep = update_endpoints();
     GitHubRelease {
         tag_name: format!("main-{}", latest_sha),
         _name: Some(format!("Built from main ({})", latest_sha)),
-        _html_url: format!("https://github.com/{}/commit/{}", GITHUB_REPO, latest_sha),
+        _html_url: format!("{}/{}/commit/{}", ep.git_base, ep.repo, latest_sha),
         _published_at: None,
         assets: vec![],
         _target_commitish: latest_sha.to_string(),
@@ -741,7 +757,8 @@ fn build_from_source() -> Result<PathBuf> {
     } else {
         // Clone
         crate::logging::info("Main channel: cloning repository...");
-        let clone_url = format!("https://github.com/{}.git", GITHUB_REPO);
+        let ep = update_endpoints();
+        let clone_url = format!("{}/{}.git", ep.git_base, ep.repo);
         let output = std::process::Command::new("git")
             .args([
                 "clone", "--depth", "1", "--branch", "main", &clone_url, "jcode",
