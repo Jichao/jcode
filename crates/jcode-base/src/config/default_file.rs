@@ -332,6 +332,17 @@ cross_provider_failover = "countdown"
 # OpenRouter/OpenAI-compatible). The TUI's client-side stall guard also extends
 # to match this value. Also overridable per-launch via JCODE_STREAM_IDLE_TIMEOUT_SECS.
 # stream_idle_timeout_secs = 600
+# Maximum number of attempts (initial request + retries) for transient errors
+# such as HTTP 429 (rate limit), 5xx, provider overload, and transport faults.
+# Non-retryable errors (auth, billing, bad request) still fail immediately.
+# Default: 8 (~5 min of retrying with the default cap). Raise it (e.g. 30) for
+# providers that throttle frequently. Also overridable via JCODE_MAX_RETRIES.
+# max_retries = 8
+# Longest single backoff sleep (seconds) between retries. The exponential ramp
+# is capped here so later attempts retry roughly once per interval instead of
+# stalling for minutes. Default: 30. A server Retry-After hint is still honored
+# up to 60s. Also overridable via JCODE_RETRY_BACKOFF_CAP_SECS.
+# retry_backoff_cap_secs = 30
 
 [agents]
 # Defaults for spawned helper agents (swarm workers, subagents, sidecars).

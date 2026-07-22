@@ -124,6 +124,25 @@ pub fn stream_idle_timeout() -> std::time::Duration {
     std::time::Duration::from_secs(secs)
 }
 
+/// Maximum number of attempts (initial request + retries) for transient errors
+/// (429, 5xx, overload, transport faults). Resolved from
+/// `[provider] max_retries` / `JCODE_MAX_RETRIES` (default 30). Clamped to at
+/// least 1 so the first attempt always runs.
+pub fn max_retries() -> u32 {
+    crate::config::config().provider.max_retries.max(1)
+}
+
+/// Longest single backoff sleep between retries for transient errors. Resolved
+/// from `[provider] retry_backoff_cap_secs` / `JCODE_RETRY_BACKOFF_CAP_SECS`
+/// (default 60s). Clamped to at least 1s.
+pub fn retry_backoff_cap() -> std::time::Duration {
+    let secs = crate::config::config()
+        .provider
+        .retry_backoff_cap_secs
+        .max(1);
+    std::time::Duration::from_secs(secs)
+}
+
 /// Whether reasoning deltas should be persisted in session history for later
 /// provider context reconstruction.
 ///

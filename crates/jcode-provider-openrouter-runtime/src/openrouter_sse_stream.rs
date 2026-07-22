@@ -37,29 +37,50 @@ pub(super) async fn run_stream_with_retries(
     provider_pin: Arc<Mutex<Option<ProviderPin>>>,
     model: String,
 ) {
+    use jcode_message_types::ConnectionPhase;
+
+    let max_retries = jcode_base::provider::max_retries();
+    let backoff_cap = jcode_base::provider::retry_backoff_cap();
     let mut last_error = None;
     let mut next_retry_delay = None;
 
-    for attempt in 0..MAX_RETRIES {
+    for attempt in 0..max_retries {
         if attempt > 0 {
-            let delay = jcode_provider_core::retry_after::retry_delay(
-                attempt,
-                RETRY_BASE_DELAY_MS,
-                next_retry_delay.take(),
-            );
-            tokio::time::sleep(delay).await;
-            jcode_base::logging::info(&format!(
-                "Retrying API request using {} (attempt {}/{})",
-                auth.label(),
+            // Honor a validated server `Retry-After` hint when present (already
+            // capped at 60s during parsing); otherwise use jittered exponential
+            // backoff, capped so later attempts in a long outage don't each
+            // stall the turn for minutes at a time.
+            let server_hint = next_retry_delay.take();
+            let delay = server_hint.unwrap_or_else(|| {
+                jcode_provider_core::attempt_tracker::retry_backoff_delay(
+                    attempt,
+                    RETRY_BASE_DELAY_MS,
+                )
+                .min(backoff_cap)
+            });
+            let _ = tx
+                .send(Ok(StreamEvent::ConnectionPhase {
+                    phase: ConnectionPhase::Retrying {
+                        attempt: attempt + 1,
+                        max: max_retries,
+                    },
+                }))
+                .await;
+            jcode_base::logging::warn(&format!(
+                "Transient API error; backing off for {:.1}s before retry {}/{} (model: {}, endpoint: {})",
+                delay.as_secs_f64(),
                 attempt + 1,
-                MAX_RETRIES
+                max_retries,
+                model,
+                api_base,
             ));
+            tokio::time::sleep(delay).await;
         }
 
         jcode_base::logging::info(&format!(
             "API stream attempt {}/{} over HTTPS transport (model: {}, endpoint: {}, auth: {})",
             attempt + 1,
-            MAX_RETRIES,
+            max_retries,
             model,
             api_base,
             auth.label()
@@ -103,7 +124,7 @@ pub(super) async fn run_stream_with_retries(
                 // Full anyhow chain ({:#}) so a `.context(...)`-wrapped transport
                 // cause (e.g. TLS BadRecordMac) is visible to the classifier.
                 let error_str = format!("{e:#}").to_lowercase();
-                if is_retryable_error(&error_str) && attempt + 1 < MAX_RETRIES {
+                if is_retryable_error(&error_str) && attempt + 1 < max_retries {
                     if saw_output {
                         // Partial output already reached the consumer; tell it
                         // to discard the partial attempt so the retried
@@ -115,7 +136,7 @@ pub(super) async fn run_stream_with_retries(
                         let _ = tx
                             .send(Ok(StreamEvent::RetryRollback {
                                 attempt: attempt + 2,
-                                max: MAX_RETRIES,
+                                max: max_retries,
                             }))
                             .await;
                     } else {
@@ -139,7 +160,7 @@ pub(super) async fn run_stream_with_retries(
         let _ = tx
             .send(Err(anyhow::anyhow!(
                 "Failed after {} retries: {}",
-                MAX_RETRIES,
+                max_retries,
                 e
             )))
             .await;
@@ -389,5 +410,32 @@ mod tests {
         assert!(is_retryable_error(
             "chat request failed\n  status: 429 unknown\n  response: {}"
         ));
+    }
+
+    #[test]
+    fn zai_glm_coding_plan_429_is_retryable() {
+        // ZAI/Zhipu coding-plan 429 body (code 1302) from open.bigmodel.cn.
+        let zai = "openai-compatible chat request failed\n  endpoint: \
+            https://open.bigmodel.cn/api/coding/paas/v4/chat/completions\n  model: glm-5.2\n  \
+            auth: zhipu_api_key\n  status: 429 too many requests\n  response: \
+            {\"error\":{\"code\":\"1302\",\"message\":\"rate limit reached for requests\"}}";
+        assert!(is_retryable_error(zai));
+    }
+
+    #[test]
+    fn exponential_backoff_is_capped_by_config() {
+        // The runtime caps the exponential ramp at the configured value.
+        let cap = jcode_base::provider::retry_backoff_cap();
+        for attempt in 1..=12u32 {
+            let raw = jcode_provider_core::attempt_tracker::retry_backoff_delay(
+                attempt,
+                RETRY_BASE_DELAY_MS,
+            );
+            let capped = raw.min(cap);
+            assert!(
+                capped <= cap,
+                "attempt {attempt}: delay {capped:?} exceeds cap {cap:?}"
+            );
+        }
     }
 }

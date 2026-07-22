@@ -723,6 +723,20 @@ impl Config {
                 }
             }
         }
+        if let Ok(v) = std::env::var("JCODE_MAX_RETRIES") {
+            if let Ok(parsed) = v.trim().parse::<u32>() {
+                if parsed > 0 {
+                    self.provider.max_retries = parsed;
+                }
+            }
+        }
+        if let Ok(v) = std::env::var("JCODE_RETRY_BACKOFF_CAP_SECS") {
+            if let Ok(parsed) = v.trim().parse::<u64>() {
+                if parsed > 0 {
+                    self.provider.retry_backoff_cap_secs = parsed;
+                }
+            }
+        }
 
         // Copilot premium mode: env var overrides config
         // If set in config but not in env, propagate config -> env

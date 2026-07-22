@@ -1319,6 +1319,21 @@ pub struct ProviderConfig {
     /// that think silently for minutes before emitting tokens. Default: 180.
     /// Overridable per-launch via `JCODE_STREAM_IDLE_TIMEOUT_SECS`.
     pub stream_idle_timeout_secs: u64,
+    /// Maximum number of attempts (initial request + retries) for transient
+    /// errors such as HTTP 429 (rate limit), 5xx, provider overload, and
+    /// transport faults. Non-retryable errors (400/401/402/403/404/…) still
+    /// bail immediately. Default: 8. Together with `retry_backoff_cap_secs`
+    /// this yields roughly 5 minutes of sustained retrying before giving up;
+    /// raise it (e.g. 30) for providers that throttle frequently.
+    /// Overridable per-launch via `JCODE_MAX_RETRIES`.
+    pub max_retries: u32,
+    /// Longest single backoff sleep (in seconds) between retries for transient
+    /// errors. The exponential ramp is capped at this value so later attempts
+    /// in a long outage retry roughly once per interval instead of stalling for
+    /// minutes. A validated server `Retry-After` hint is still honored up to
+    /// 60s. Default: 30. Overridable per-launch via
+    /// `JCODE_RETRY_BACKOFF_CAP_SECS`.
+    pub retry_backoff_cap_secs: u64,
 }
 
 impl Default for ProviderConfig {
@@ -1338,6 +1353,8 @@ impl Default for ProviderConfig {
             copilot_premium: None,
             model_picker_providers: None,
             stream_idle_timeout_secs: 180,
+            max_retries: 8,
+            retry_backoff_cap_secs: 30,
         }
     }
 }
