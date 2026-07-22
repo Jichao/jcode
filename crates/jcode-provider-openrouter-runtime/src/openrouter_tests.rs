@@ -417,7 +417,7 @@ fn direct_deepseek_profile_omits_image_url_parts() {
         "DeepSeek request must not contain unsupported image_url content parts: {request}"
     );
     assert!(
-        request.contains("Image omitted"),
+        request.contains("Image saved to") || request.contains("Image omitted"),
         "DeepSeek request should preserve a textual placeholder for omitted images: {request}"
     );
 }

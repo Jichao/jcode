@@ -167,6 +167,35 @@ fn flatten_top_level_combinators(schema: &mut Value) {
     }
 }
 
+/// Save a base64-encoded image to a temp file so non-vision models can still
+/// access it via tools (MCP vision server, `read`, etc.) when the provider
+/// rejects `image_url` content. Returns `(path, byte_count)` on success.
+fn save_image_to_temp(data: &str, media_type: &str) -> Option<(std::path::PathBuf, usize)> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data)
+        .ok()?;
+    let ext = match media_type {
+        "image/png" => "png",
+        "image/jpeg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        _ => "img",
+    };
+    // Content-addressed filename: same image writes the same file once.
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    let filename = format!("jcode-img-{:x}.{}", hasher.finish(), ext);
+    let dir = std::env::temp_dir().join("jcode-images");
+    std::fs::create_dir_all(&dir).ok()?;
+    let path = dir.join(filename);
+    if !path.exists() {
+        std::fs::write(&path, &bytes).ok()?;
+    }
+    Some((path, bytes.len()))
+}
+
 /// Build OpenAI-compatible chat `messages` for OpenRouter/direct compatible providers.
 ///
 /// This stays in the OpenRouter leaf crate so provider-specific message normalization,
@@ -253,12 +282,21 @@ pub fn build_chat_messages(
                                     }
                                 }));
                             } else {
-                                pending_user_parts.push(serde_json::json!({
-                                    "type": "text",
-                                    "text": format!(
+                                let placeholder = match save_image_to_temp(data, media_type) {
+                                    Some((path, size)) => format!(
+                                        "[Image saved to {} ({:.1} KB, {}). Use an MCP vision tool or the `read` tool to analyze it.]",
+                                        path.display(),
+                                        size as f64 / 1024.0,
+                                        media_type
+                                    ),
+                                    None => format!(
                                         "[Image omitted: this provider/model does not support image input; media_type={}]",
                                         media_type
-                                    )
+                                    ),
+                                };
+                                pending_user_parts.push(serde_json::json!({
+                                    "type": "text",
+                                    "text": placeholder
                                 }));
                             }
                         }
