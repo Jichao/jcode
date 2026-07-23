@@ -423,6 +423,16 @@ mod tests {
     }
 
     #[test]
+    fn zai_glm_coding_overload_429_is_retryable() {
+        // ZAI/Zhipu's overload response seen from the coding endpoint.
+        let zai = "openai-compatible chat request failed\n  endpoint: \
+            https://open.bigmodel.cn/api/coding/paas/v4/chat/completions\n  model: glm-5.2\n  \
+            auth: zhipu_api_key\n  status: 429 too many requests\n  response: \
+            {\"error\":{\"code\":\"1305\",\"message\":\"the model is currently overloaded\"}}";
+        assert!(is_retryable_error(zai));
+    }
+
+    #[test]
     fn exponential_backoff_is_capped_by_config() {
         // The runtime caps the exponential ramp at the configured value.
         let cap = jcode_base::provider::retry_backoff_cap();

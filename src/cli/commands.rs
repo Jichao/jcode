@@ -2150,6 +2150,16 @@ pub async fn run_server_reload_command(force: bool, emit_json: bool) -> Result<(
     }
 
     let mut client = crate::server::Client::connect().await?;
+    let subscribe_id = client.subscribe().await?;
+    loop {
+        match client.read_event().await? {
+            ServerEvent::Done { id } if id == subscribe_id => break,
+            ServerEvent::Error { id, message, .. } if id == subscribe_id => {
+                anyhow::bail!("server reload subscribe failed: {message}");
+            }
+            _ => {}
+        }
+    }
 
     // Before asking the (possibly older) daemon to reload, repair a stale
     // `shared-server` channel from the client side. The running server resolves
